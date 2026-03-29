@@ -1,4 +1,11 @@
-# Webapp: go-app.dev with Bazel
+# Webapp
+
+This project was created with the help of Gemini CLI.
+
+## Status
+
+[![Build and Test](https://github.com/filmil/webapp/actions/workflows/build-test.yml/badge.svg)](https://github.com/filmil/webapp/actions/workflows/build-test.yml)
+: go-app.dev with Bazel
 
 This is a "Hello World" application built using [go-app.dev](https://go-app.dev/)
 and the [Bazel](https://bazel.build/) build system with
