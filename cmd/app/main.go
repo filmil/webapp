@@ -210,7 +210,7 @@ func main() {
 				} else {
 					myMap.setView([lat, lon], 13);
 				}
-				
+
 				if (marker) myMap.removeLayer(marker);
 				marker = L.marker([lat, lon]).addTo(myMap);
 			}
@@ -218,7 +218,7 @@ func main() {
 			function drawIsochrone(geoJsonStr) {
 				if (!myMap) return;
 				if (polygonLayer) myMap.removeLayer(polygonLayer);
-				
+
 				try {
 					var geojson = JSON.parse(geoJsonStr);
 					polygonLayer = L.geoJSON(geojson, {
@@ -234,10 +234,10 @@ func main() {
 							else if (value <= 1800) color = '#fc4e2a';
 							else if (value <= 2400) color = '#e31a1c';
 							else color = '#b10026';
-							
+
 							return {
-								color: color, 
-								weight: 1, 
+								color: color,
+								weight: 1,
 								fillOpacity: 0.4
 							};
 						}
