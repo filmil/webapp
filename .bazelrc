@@ -1,0 +1,8 @@
+# Load user.bazelrc if it exists
+try-import %workspace%/user.bazelrc
+
+# build --incompatible_enable_proto_toolchain_resolution
+# build --@protobuf//bazel/flags:prefer_prebuilt_protoc
+
+common --registry=https://bcr.bazel.build
+common --registry=https://raw.githubusercontent.com/filmil/bazel-registry/main
