@@ -4,8 +4,10 @@ This project was created with the help of Gemini CLI.
 
 ## Status
 
-[![Build and Test](https://github.com/filmil/webapp/actions/workflows/build-test.yml/badge.svg)](https://github.com/filmil/webapp/actions/workflows/build-test.yml)
-: go-app.dev with Bazel
+[![CI](https://github.com/filmil/webapp/actions/workflows/ci.yml/badge.svg)](https://github.com/filmil/webapp/actions/workflows/ci.yml)
+[![Release](https://github.com/filmil/webapp/actions/workflows/release.yml/badge.svg)](https://github.com/filmil/webapp/actions/workflows/release.yml)
+
+## go-app.dev with Bazel
 
 This is a "Hello World" application built using [go-app.dev](https://go-app.dev/)
 and the [Bazel](https://bazel.build/) build system with

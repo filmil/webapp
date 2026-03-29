@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bazelisk
+        uses: bazelbuild/setup-bazelisk@v3
+
+      - name: Mount Bazel Cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/bazel-disk-cache
+            ~/.cache/bazel-repository-cache
+          key: ${{ runner.os }}-bazel-linux-amd64-${{ hashFiles('MODULE.bazel.lock', 'go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-bazel-linux-amd64-
+
+      - name: Bazel Build
+        run: bazel build --disk_cache=~/.cache/bazel-disk-cache --repository_cache=~/.cache/bazel-repository-cache //...
+
+      - name: Bazel Test
+        run: bazel test --disk_cache=~/.cache/bazel-disk-cache --repository_cache=~/.cache/bazel-repository-cache //...
