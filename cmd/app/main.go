@@ -4,10 +4,12 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/maxence-charriere/go-app/v9/pkg/app"
 )
@@ -20,24 +22,43 @@ var (
 type Hello struct {
 	app.Compo
 	address  string
+	hours    string
+	apiKey   string
 	errorMsg string
 }
 
 func (h *Hello) Render() app.UI {
 	return app.Main().Style("padding", "20px").Style("font-family", "sans-serif").Body(
-		app.H1().Text("OpenStreetMap Geocoder"),
-		app.P().Text("Enter an address to zoom to the location."),
+		app.H1().Text("Isochrone Map (Reachable Area)"),
+		app.P().Text("Enter an address, travel time in hours, and your OpenRouteService API key to see the reachable area by car."),
 		app.Div().Style("margin-bottom", "20px").Body(
 			app.Input().
 				Type("text").
 				Value(h.address).
 				Placeholder("Enter an address...").
-				Style("width", "300px").
+				Style("width", "250px").
 				Style("padding", "8px").
 				Style("margin-right", "10px").
-				OnChange(h.OnInputChange),
+				OnChange(h.OnAddressChange),
+			app.Input().
+				Type("number").
+				Step(0.1).
+				Value(h.hours).
+				Placeholder("Hours (e.g., 1)").
+				Style("width", "120px").
+				Style("padding", "8px").
+				Style("margin-right", "10px").
+				OnChange(h.OnHoursChange),
+			app.Input().
+				Type("password").
+				Value(h.apiKey).
+				Placeholder("ORS API Key").
+				Style("width", "200px").
+				Style("padding", "8px").
+				Style("margin-right", "10px").
+				OnChange(h.OnAPIKeyChange),
 			app.Button().
-				Text("Search Address").
+				Text("Search & Compute Area").
 				Style("padding", "8px 16px").
 				OnClick(h.OnSearch),
 		),
@@ -47,7 +68,7 @@ func (h *Hello) Render() app.UI {
 		app.Div().
 			ID("map").
 			Style("width", "100%").
-			Style("height", "500px").
+			Style("height", "600px").
 			Style("background-color", "#e0e0e0").
 			Style("border", "1px solid #ccc").
 			Style("border-radius", "4px"),
@@ -55,23 +76,31 @@ func (h *Hello) Render() app.UI {
 }
 
 func (h *Hello) OnMount(ctx app.Context) {
-	// Initialize map to a default location (e.g., London) when the component mounts
 	ctx.Async(func() {
 		app.Window().Call("loadMap", 51.505, -0.09)
 	})
 }
 
-func (h *Hello) OnInputChange(ctx app.Context, e app.Event) {
+func (h *Hello) OnAddressChange(ctx app.Context, e app.Event) {
 	h.address = ctx.JSSrc().Get("value").String()
+}
+
+func (h *Hello) OnHoursChange(ctx app.Context, e app.Event) {
+	h.hours = ctx.JSSrc().Get("value").String()
+}
+
+func (h *Hello) OnAPIKeyChange(ctx app.Context, e app.Event) {
+	h.apiKey = ctx.JSSrc().Get("value").String()
 }
 
 func (h *Hello) OnSearch(ctx app.Context, e app.Event) {
 	if h.address == "" {
 		return
 	}
-	h.errorMsg = "Searching..."
+	h.errorMsg = "Searching location..."
 
 	ctx.Async(func() {
+		// 1. Geocode
 		query := url.QueryEscape(h.address)
 		urlStr := "https://nominatim.openstreetmap.org/search?format=json&q=" + query
 
@@ -80,7 +109,6 @@ func (h *Hello) OnSearch(ctx app.Context, e app.Event) {
 			ctx.Dispatch(func(ctx app.Context) { h.errorMsg = err.Error() })
 			return
 		}
-		// Nominatim requires a valid User-Agent
 		req.Header.Set("User-Agent", "GeminiCLI-DemoApp/1.0")
 
 		resp, err := http.DefaultClient.Do(req)
@@ -96,7 +124,7 @@ func (h *Hello) OnSearch(ctx app.Context, e app.Event) {
 		}
 
 		if err := json.NewDecoder(resp.Body).Decode(&results); err != nil {
-			ctx.Dispatch(func(ctx app.Context) { h.errorMsg = "Failed to parse response" })
+			ctx.Dispatch(func(ctx app.Context) { h.errorMsg = "Failed to parse geocoding response" })
 			return
 		}
 
@@ -109,9 +137,54 @@ func (h *Hello) OnSearch(ctx app.Context, e app.Event) {
 		lon, _ := strconv.ParseFloat(results[0].Lon, 64)
 
 		ctx.Dispatch(func(ctx app.Context) {
-			h.errorMsg = ""
 			app.Window().Call("loadMap", lat, lon)
 		})
+
+		// 2. Fetch Isochrone if hours and api key are provided
+		hoursVal, _ := strconv.ParseFloat(h.hours, 64)
+		if hoursVal > 0 && h.apiKey != "" {
+			ctx.Dispatch(func(ctx app.Context) { h.errorMsg = "Computing reachable area..." })
+
+			rangeSeconds := hoursVal * 3600
+			reqBody := fmt.Sprintf(`{"locations":[[%f,%f]],"range":[%f]}`, lon, lat, rangeSeconds)
+
+			isoReq, err := http.NewRequest("POST", "https://api.openrouteservice.org/v2/isochrones/driving-car", strings.NewReader(reqBody))
+			if err != nil {
+				ctx.Dispatch(func(ctx app.Context) { h.errorMsg = "Isochrone request error: " + err.Error() })
+				return
+			}
+			isoReq.Header.Set("Authorization", h.apiKey)
+			isoReq.Header.Set("Content-Type", "application/json; charset=utf-8")
+			isoReq.Header.Set("Accept", "application/json, application/geo+json, application/gpx+xml, img/png; charset=utf-8")
+
+			isoResp, err := http.DefaultClient.Do(isoReq)
+			if err != nil {
+				ctx.Dispatch(func(ctx app.Context) { h.errorMsg = "Isochrone network error: " + err.Error() })
+				return
+			}
+			defer isoResp.Body.Close()
+
+			bodyBytes, _ := io.ReadAll(isoResp.Body)
+			if isoResp.StatusCode != 200 {
+				ctx.Dispatch(func(ctx app.Context) {
+					h.errorMsg = fmt.Sprintf("Isochrone API error (%d): %s", isoResp.StatusCode, string(bodyBytes))
+				})
+				return
+			}
+
+			geoJsonStr := string(bodyBytes)
+			ctx.Dispatch(func(ctx app.Context) {
+				h.errorMsg = ""
+				app.Window().Call("drawIsochrone", geoJsonStr)
+			})
+		} else {
+			ctx.Dispatch(func(ctx app.Context) {
+				h.errorMsg = ""
+				if hoursVal > 0 && h.apiKey == "" {
+					h.errorMsg = "Please provide an OpenRouteService API Key to compute the reachable area."
+				}
+			})
+		}
 	})
 }
 
@@ -123,7 +196,7 @@ func main() {
 	flag.Parse()
 
 	h := &app.Handler{
-		Title: "Map WebApp",
+		Title: "Isochrone Map WebApp",
 		Styles: []string{
 			"https://unpkg.com/leaflet@1.9.4/dist/leaflet.css",
 		},
@@ -134,6 +207,9 @@ func main() {
 			`
 			<script>
 			var myMap;
+			var marker;
+			var polygonLayer;
+
 			function loadMap(lat, lon) {
 				if (typeof L === 'undefined') {
 					setTimeout(function() { loadMap(lat, lon); }, 100);
@@ -148,10 +224,30 @@ func main() {
 					myMap = L.map('map').setView([lat, lon], 13);
 					L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 						maxZoom: 19,
-						attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+						attribution: '&copy; OpenStreetMap'
 					}).addTo(myMap);
 				} else {
 					myMap.setView([lat, lon], 13);
+				}
+				
+				if (marker) myMap.removeLayer(marker);
+				marker = L.marker([lat, lon]).addTo(myMap);
+			}
+
+			function drawIsochrone(geoJsonStr) {
+				if (!myMap) return;
+				if (polygonLayer) myMap.removeLayer(polygonLayer);
+				
+				try {
+					var geojson = JSON.parse(geoJsonStr);
+					polygonLayer = L.geoJSON(geojson, {
+						style: function (feature) {
+							return {color: '#3388ff', weight: 2, fillOpacity: 0.2};
+						}
+					}).addTo(myMap);
+					myMap.fitBounds(polygonLayer.getBounds());
+				} catch (e) {
+					console.error("Error parsing/drawing GeoJSON", e);
 				}
 			}
 			</script>
