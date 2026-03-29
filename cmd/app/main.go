@@ -22,7 +22,6 @@ var (
 type Hello struct {
 	app.Compo
 	address  string
-	hours    string
 	apiKey   string
 	errorMsg string
 }
@@ -30,7 +29,7 @@ type Hello struct {
 func (h *Hello) Render() app.UI {
 	return app.Main().Style("padding", "20px").Style("font-family", "sans-serif").Body(
 		app.H1().Text("Isochrone Map (Reachable Area)"),
-		app.P().Text("Enter an address, travel time in hours, and your OpenRouteService API key to see the reachable area by car."),
+		app.P().Text("Enter an address and your OpenRouteService API key to see the reachable area by car at 1, 5, 10, 15, 20, 30, 40, and 60 minutes."),
 		app.Div().Style("margin-bottom", "20px").Body(
 			app.Input().
 				Type("text").
@@ -40,15 +39,6 @@ func (h *Hello) Render() app.UI {
 				Style("padding", "8px").
 				Style("margin-right", "10px").
 				OnChange(h.OnAddressChange),
-			app.Input().
-				Type("number").
-				Step(0.1).
-				Value(h.hours).
-				Placeholder("Hours (e.g., 1)").
-				Style("width", "120px").
-				Style("padding", "8px").
-				Style("margin-right", "10px").
-				OnChange(h.OnHoursChange),
 			app.Input().
 				Type("password").
 				Value(h.apiKey).
@@ -83,10 +73,6 @@ func (h *Hello) OnMount(ctx app.Context) {
 
 func (h *Hello) OnAddressChange(ctx app.Context, e app.Event) {
 	h.address = ctx.JSSrc().Get("value").String()
-}
-
-func (h *Hello) OnHoursChange(ctx app.Context, e app.Event) {
-	h.hours = ctx.JSSrc().Get("value").String()
 }
 
 func (h *Hello) OnAPIKeyChange(ctx app.Context, e app.Event) {
@@ -140,13 +126,11 @@ func (h *Hello) OnSearch(ctx app.Context, e app.Event) {
 			app.Window().Call("loadMap", lat, lon)
 		})
 
-		// 2. Fetch Isochrone if hours and api key are provided
-		hoursVal, _ := strconv.ParseFloat(h.hours, 64)
-		if hoursVal > 0 && h.apiKey != "" {
-			ctx.Dispatch(func(ctx app.Context) { h.errorMsg = "Computing reachable area..." })
+		// 2. Fetch Isochrones if api key is provided
+		if h.apiKey != "" {
+			ctx.Dispatch(func(ctx app.Context) { h.errorMsg = "Computing reachable areas..." })
 
-			rangeSeconds := hoursVal * 3600
-			reqBody := fmt.Sprintf(`{"locations":[[%f,%f]],"range":[%f]}`, lon, lat, rangeSeconds)
+			reqBody := fmt.Sprintf(`{"locations":[[%f,%f]],"range":[60,300,600,900,1200,1800,2400,3600]}`, lon, lat)
 
 			isoReq, err := http.NewRequest("POST", "https://api.openrouteservice.org/v2/isochrones/driving-car", strings.NewReader(reqBody))
 			if err != nil {
@@ -179,10 +163,7 @@ func (h *Hello) OnSearch(ctx app.Context, e app.Event) {
 			})
 		} else {
 			ctx.Dispatch(func(ctx app.Context) {
-				h.errorMsg = ""
-				if hoursVal > 0 && h.apiKey == "" {
-					h.errorMsg = "Please provide an OpenRouteService API Key to compute the reachable area."
-				}
+				h.errorMsg = "Please provide an OpenRouteService API Key to compute the reachable area."
 			})
 		}
 	})
@@ -242,7 +223,23 @@ func main() {
 					var geojson = JSON.parse(geoJsonStr);
 					polygonLayer = L.geoJSON(geojson, {
 						style: function (feature) {
-							return {color: '#3388ff', weight: 2, fillOpacity: 0.2};
+							// Color code based on range value (in seconds)
+							var value = feature.properties.value;
+							var color = '#800026';
+							if (value <= 60) color = '#ffffcc';
+							else if (value <= 300) color = '#ffeda0';
+							else if (value <= 600) color = '#fed976';
+							else if (value <= 900) color = '#feb24c';
+							else if (value <= 1200) color = '#fd8d3c';
+							else if (value <= 1800) color = '#fc4e2a';
+							else if (value <= 2400) color = '#e31a1c';
+							else color = '#b10026';
+							
+							return {
+								color: color, 
+								weight: 1, 
+								fillOpacity: 0.4
+							};
 						}
 					}).addTo(myMap);
 					myMap.fitBounds(polygonLayer.getBounds());
