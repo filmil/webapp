@@ -10,18 +10,24 @@ go_library(
 
 go_binary(
     name = "app.wasm",
+    srcs = ["main_wasm.go"],
     embed = [":app_lib"],
     goarch = "wasm",
     goos = "js",
     visibility = ["//visibility:public"],
 )
 
+genrule(
+    name = "bundle_wasm",
+    srcs = [":app.wasm"],
+    outs = ["app_bundled.wasm"],
+    cmd = "cp $(location :app.wasm) $@",
+)
+
 go_binary(
     name = "server",
-    args = [
-        "--wasm-path=$(location :app.wasm)",
-    ],
-    data = [":app.wasm"],
+    srcs = ["main_server.go"],
     embed = [":app_lib"],
+    embedsrcs = [":app_bundled.wasm"],
     visibility = ["//visibility:public"],
 )
