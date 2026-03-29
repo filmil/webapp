@@ -1,5 +1,13 @@
 load("@gazelle//:def.bzl", "gazelle")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
 
 # gazelle:prefix webapp
 gazelle(name = "gazelle")
+
+sh_test(
+    name = "tbd",
+    srcs = [
+        "test.bash",
+    ],
+)
 
