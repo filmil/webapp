@@ -9,15 +9,25 @@ This project was created with the help of Gemini CLI.
 
 ## go-app.dev with Bazel
 
-This is a "Hello World" application built using [go-app.dev](https://go-app.dev/)
-and the [Bazel](https://bazel.build/) build system with
-[rules_go](https://github.com/bazelbuild/rules_go).
+This is an interactive map application built using
+[go-app.dev](https://go-app.dev/) and the [Bazel](https://bazel.build/) build
+system with [rules_go](https://github.com/bazelbuild/rules_go).
 
 ## Features
 
-- Simple PWA "Hello World" using go-app.dev v9.
+- Interactive Map application using go-app.dev v9 and Leaflet.js.
+- Address geocoding using Nominatim (OpenStreetMap).
+- Reachable area (isochrone) computation using OpenRouteService API.
+  Displays driving ranges at 1, 5, 10, 15, 20, 30, 40, and 60 minutes.
 - Bazel configuration for both WASM and host server binaries.
 - Integrated dependency management using Go modules and Bazel Bzlmod.
+- Configured with `rules_shell` for shell testing.
+
+## Requirements
+
+To use the reachable area (isochrone) feature, you will need a free API key
+from [OpenRouteService](https://openrouteservice.org/). The basic map view
+and address search (geocoding) will work without an API key.
 
 ## Building the project
 
