@@ -298,6 +298,42 @@ func (l *LoginCallback) OnMount(ctx app.Context) {
 	ctx.Navigate("/")
 }
 
+// GraphsPanel component
+type GraphsPanel struct {
+	app.Compo
+}
+
+func (p *GraphsPanel) Render() app.UI {
+	return app.Div().Style("padding", "20px").Body(
+		app.H2().Text("Example Graphs (Panel 3)"),
+		app.Div().Style("display", "flex").Style("flex-wrap", "wrap").Style("gap", "20px").Body(
+			app.Div().Style("width", "400px").Body(
+				app.Canvas().ID("barChart"),
+			),
+			app.Div().Style("width", "400px").Body(
+				app.Canvas().ID("lineChart"),
+			),
+			app.Div().Style("width", "300px").Body(
+				app.Canvas().ID("doughnutChart"),
+			),
+			app.Div().Style("width", "600px").Style("height", "500px").ID("plot3d"),
+		),
+	)
+}
+
+func (p *GraphsPanel) OnMount(ctx app.Context) {
+	ctx.Async(func() {
+		for {
+			if !app.Window().Get("Chart").IsUndefined() && !app.Window().Get("Plotly").IsUndefined() {
+				break
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+		app.Window().Call("drawExampleCharts")
+		app.Window().Call("draw3DChart")
+	})
+}
+
 // Root component
 type Root struct {
 	app.Compo
@@ -306,6 +342,9 @@ type Root struct {
 
 func (r *Root) Render() app.UI {
 	isIsochrone := r.currentApp == "isochrone" || r.currentApp == ""
+	isGreeting := r.currentApp == "greeting"
+	isGraphs := r.currentApp == "graphs"
+
 	return app.Main().Style("font-family", "sans-serif").Body(
 		app.Nav().Style("display", "flex").Style("background-color", "#333").Style("padding", "10px").Body(
 			app.Button().Text("Isochrone Map").
@@ -318,19 +357,31 @@ func (r *Root) Render() app.UI {
 				Style("border-radius", "4px").
 				OnClick(r.showIsochrone),
 			app.Button().Text("Google Login").
-				Style("background-color", map[bool]string{true: "#555", false: "#333"}[!isIsochrone]).
+				Style("margin-right", "10px").
+				Style("background-color", map[bool]string{true: "#555", false: "#333"}[isGreeting]).
 				Style("color", "white").
 				Style("border", "none").
 				Style("padding", "10px 20px").
 				Style("cursor", "pointer").
 				Style("border-radius", "4px").
 				OnClick(r.showGreeting),
+			app.Button().Text("Example Graphs").
+				Style("background-color", map[bool]string{true: "#555", false: "#333"}[isGraphs]).
+				Style("color", "white").
+				Style("border", "none").
+				Style("padding", "10px 20px").
+				Style("cursor", "pointer").
+				Style("border-radius", "4px").
+				OnClick(r.showGraphs),
 		),
 		app.Div().Style("display", map[bool]string{true: "block", false: "none"}[isIsochrone]).Body(
 			&IsochronePanel{},
 		),
-		app.Div().Style("display", map[bool]string{true: "block", false: "none"}[!isIsochrone]).Body(
+		app.Div().Style("display", map[bool]string{true: "block", false: "none"}[isGreeting]).Body(
 			&GreetingPanel{},
+		),
+		app.Div().Style("display", map[bool]string{true: "block", false: "none"}[isGraphs]).Body(
+			&GraphsPanel{},
 		),
 	)
 }
@@ -341,6 +392,10 @@ func (r *Root) showIsochrone(ctx app.Context, e app.Event) {
 
 func (r *Root) showGreeting(ctx app.Context, e app.Event) {
 	r.currentApp = "greeting"
+}
+
+func (r *Root) showGraphs(ctx app.Context, e app.Event) {
+	r.currentApp = "graphs"
 }
 
 func main() {
@@ -358,10 +413,96 @@ func main() {
 		},
 		Scripts: []string{
 			"https://unpkg.com/leaflet@1.9.4/dist/leaflet.js",
+			"https://cdn.jsdelivr.net/npm/chart.js",
+			"https://cdn.plot.ly/plotly-2.32.0.min.js",
 		},
 		RawHeaders: []string{
 			`
 			<script>
+			function draw3DChart() {
+				var z_data = [];
+				for(var i=0;i<25;i++) {
+					var row = [];
+					for(var j=0;j<25;j++) {
+						row.push(Math.sin(i/3.0) * Math.cos(j/3.0));
+					}
+					z_data.push(row);
+				}
+				var data = [{
+					z: z_data,
+					type: 'contour'
+				}];
+				var layout = {
+					title: '2D Contour Plot (WebGL Fallback)',
+					autosize: true,
+					margin: {l: 50, r: 50, b: 50, t: 50}
+				};
+				Plotly.newPlot('plot3d', data, layout);
+			}
+
+			function drawExampleCharts() {
+				if (window.myBarChart) window.myBarChart.destroy();
+				if (window.myLineChart) window.myLineChart.destroy();
+				if (window.myDoughnutChart) window.myDoughnutChart.destroy();
+
+				const barCtx = document.getElementById('barChart');
+				if (barCtx) {
+					window.myBarChart = new Chart(barCtx, {
+						type: 'bar',
+						data: {
+							labels: ['Red', 'Blue', 'Yellow', 'Green', 'Purple', 'Orange'],
+							datasets: [{
+								label: '# of Votes',
+								data: [12, 19, 3, 5, 2, 3],
+								backgroundColor: [
+									'rgba(255, 99, 132, 0.2)', 'rgba(54, 162, 235, 0.2)', 'rgba(255, 206, 86, 0.2)',
+									'rgba(75, 192, 192, 0.2)', 'rgba(153, 102, 255, 0.2)', 'rgba(255, 159, 64, 0.2)'
+								],
+								borderColor: [
+									'rgba(255, 99, 132, 1)', 'rgba(54, 162, 235, 1)', 'rgba(255, 206, 86, 1)',
+									'rgba(75, 192, 192, 1)', 'rgba(153, 102, 255, 1)', 'rgba(255, 159, 64, 1)'
+								],
+								borderWidth: 1
+							}]
+						},
+						options: { scales: { y: { beginAtZero: true } } }
+					});
+				}
+
+				const lineCtx = document.getElementById('lineChart');
+				if (lineCtx) {
+					window.myLineChart = new Chart(lineCtx, {
+						type: 'line',
+						data: {
+							labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'],
+							datasets: [{
+								label: 'Monthly Sales',
+								data: [65, 59, 80, 81, 56, 55, 40],
+								fill: false,
+								borderColor: 'rgb(75, 192, 192)',
+								tension: 0.1
+							}]
+						}
+					});
+				}
+
+				const doughnutCtx = document.getElementById('doughnutChart');
+				if (doughnutCtx) {
+					window.myDoughnutChart = new Chart(doughnutCtx, {
+						type: 'doughnut',
+						data: {
+							labels: ['Download Sales', 'In-Store Sales', 'Mail-Order Sales'],
+							datasets: [{
+								label: 'Sales Distribution',
+								data: [300, 50, 100],
+								backgroundColor: ['rgb(255, 99, 132)', 'rgb(54, 162, 235)', 'rgb(255, 205, 86)'],
+								hoverOffset: 4
+							}]
+						}
+					});
+				}
+			}
+
 			var myMap;
 			var marker;
 			var polygonLayer;
