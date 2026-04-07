@@ -10,42 +10,45 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/maxence-charriere/go-app/v9/pkg/app"
 )
 
 var (
-	wasmLoc = flag.String("wasm-path", "", "path to the web app wasm file")
-	port    = flag.Int("port", 7000, "default port to use")
+	wasmLoc  = flag.String("wasm-path", "", "path to the web app wasm file")
+	port     = flag.Int("port", 7000, "default port to use")
+	clientID = flag.String("google-client-id", "841378387526-qn3965fuan6b08os2pf33ul3lqr800dn.apps.googleusercontent.com", "Google Client ID")
 )
 
-type Hello struct {
+// IsochronePanel component
+type IsochronePanel struct {
 	app.Compo
 	address  string
 	apiKey   string
 	errorMsg string
 }
 
-func (h *Hello) Render() app.UI {
-	return app.Main().Style("padding", "20px").Style("font-family", "sans-serif").Body(
-		app.H1().Text("Isochrone Map (Reachable Area)"),
-		app.P().Text("Enter an address and your OpenRouteService API key to see the reachable area by car at 1, 5, 10, 15, 20, 30, 40, and 60 minutes."),
+func (h *IsochronePanel) Render() app.UI {
+	return app.Div().Style("padding", "20px").Body(
+		app.H2().Text("Isochrone Map (Panel 1)"),
+		app.P().Text("Enter an address and ORS API key to see reachable area."),
 		app.Div().Style("margin-bottom", "20px").Body(
 			app.Input().
 				Type("text").
 				Value(h.address).
 				Placeholder("Enter an address...").
-				Style("width", "250px").
+				Style("width", "100%").
 				Style("padding", "8px").
-				Style("margin-right", "10px").
+				Style("margin-bottom", "10px").
 				OnChange(h.OnAddressChange),
 			app.Input().
 				Type("password").
 				Value(h.apiKey).
 				Placeholder("ORS API Key").
-				Style("width", "200px").
+				Style("width", "100%").
 				Style("padding", "8px").
-				Style("margin-right", "10px").
+				Style("margin-bottom", "10px").
 				OnChange(h.OnAPIKeyChange),
 			app.Button().
 				Text("Search & Compute Area").
@@ -58,28 +61,28 @@ func (h *Hello) Render() app.UI {
 		app.Div().
 			ID("map").
 			Style("width", "100%").
-			Style("height", "600px").
+			Style("height", "400px").
 			Style("background-color", "#e0e0e0").
 			Style("border", "1px solid #ccc").
 			Style("border-radius", "4px"),
 	)
 }
 
-func (h *Hello) OnMount(ctx app.Context) {
+func (h *IsochronePanel) OnMount(ctx app.Context) {
 	ctx.Async(func() {
 		app.Window().Call("loadMap", 51.505, -0.09)
 	})
 }
 
-func (h *Hello) OnAddressChange(ctx app.Context, e app.Event) {
+func (h *IsochronePanel) OnAddressChange(ctx app.Context, e app.Event) {
 	h.address = ctx.JSSrc().Get("value").String()
 }
 
-func (h *Hello) OnAPIKeyChange(ctx app.Context, e app.Event) {
+func (h *IsochronePanel) OnAPIKeyChange(ctx app.Context, e app.Event) {
 	h.apiKey = ctx.JSSrc().Get("value").String()
 }
 
-func (h *Hello) OnSearch(ctx app.Context, e app.Event) {
+func (h *IsochronePanel) OnSearch(ctx app.Context, e app.Event) {
 	if h.address == "" {
 		return
 	}
@@ -139,7 +142,7 @@ func (h *Hello) OnSearch(ctx app.Context, e app.Event) {
 			}
 			isoReq.Header.Set("Authorization", h.apiKey)
 			isoReq.Header.Set("Content-Type", "application/json; charset=utf-8")
-			isoReq.Header.Set("Accept", "application/json, application/geo+json, application/gpx+xml, img/png; charset=utf-8")
+			isoReq.Header.Set("Accept", "application/json")
 
 			isoResp, err := http.DefaultClient.Do(isoReq)
 			if err != nil {
@@ -169,15 +172,187 @@ func (h *Hello) OnSearch(ctx app.Context, e app.Event) {
 	})
 }
 
+// GreetingPanel component
+type GreetingPanel struct {
+	app.Compo
+	Token    string
+	UserName string
+	ErrorMsg string
+}
+
+func (g *GreetingPanel) Render() app.UI {
+	u, _ := url.Parse("https://accounts.google.com/o/oauth2/v2/auth")
+	q := u.Query()
+	q.Set("client_id", *clientID)
+	q.Set("response_type", "token")
+	q.Set("scope", "https://www.googleapis.com/auth/userinfo.profile")
+	q.Set("state", "login")
+	q.Set("redirect_uri", fmt.Sprintf("http://localhost:%d/foobar", *port))
+	u.RawQuery = q.Encode()
+
+	return app.Div().Style("padding", "20px").Body(
+		app.H2().Text("Google Login (Panel 2)"),
+		app.If(g.Token == "",
+			app.Div().Body(
+				app.P().Text("Login with Google to see a personalized greeting."),
+				app.A().
+					Text("Log In").
+					Href(u.String()).
+					Style("display", "inline-block").
+					Style("padding", "10px 20px").
+					Style("background-color", "#4285F4").
+					Style("color", "white").
+					Style("text-decoration", "none").
+					Style("border-radius", "4px"),
+			),
+		).Else(
+			app.Div().Body(
+				app.If(g.UserName != "",
+					app.H1().Text("Hello world, "+g.UserName),
+				).ElseIf(g.ErrorMsg != "",
+					app.P().Style("color", "red").Text(g.ErrorMsg),
+				).Else(
+					app.P().Text("Loading profile..."),
+				),
+				app.Button().
+					Text("Logout").
+					Style("padding", "8px 16px").
+					Style("margin-top", "20px").
+					OnClick(g.OnLogout),
+			),
+		),
+	)
+}
+
+func (g *GreetingPanel) OnMount(ctx app.Context) {
+	ctx.ObserveState("/login").OnChange(func() {
+		if g.Token != "" && g.UserName == "" {
+			g.fetchProfile(ctx)
+		}
+	}).Value(&g.Token)
+	if g.Token != "" && g.UserName == "" {
+		g.fetchProfile(ctx)
+	}
+}
+
+func (g *GreetingPanel) fetchProfile(ctx app.Context) {
+	ctx.Async(func() {
+		req, err := http.NewRequest("GET", "https://www.googleapis.com/oauth2/v3/userinfo", nil)
+		if err != nil {
+			ctx.Dispatch(func(ctx app.Context) { g.ErrorMsg = "Failed to create request: " + err.Error() })
+			return
+		}
+		req.Header.Set("Authorization", "Bearer "+g.Token)
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			ctx.Dispatch(func(ctx app.Context) { g.ErrorMsg = "Network error: " + err.Error() })
+			return
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != 200 {
+			ctx.Dispatch(func(ctx app.Context) { g.ErrorMsg = fmt.Sprintf("API error (%d)", resp.StatusCode) })
+			return
+		}
+
+		var profile struct {
+			Name string `json:"name"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&profile); err == nil {
+			ctx.Dispatch(func(ctx app.Context) {
+				g.UserName = profile.Name
+				g.ErrorMsg = ""
+			})
+		} else {
+			ctx.Dispatch(func(ctx app.Context) { g.ErrorMsg = "Failed to parse profile" })
+		}
+	})
+}
+
+func (g *GreetingPanel) OnLogout(ctx app.Context, e app.Event) {
+	ctx.SetState("/login", "", app.Persist)
+	g.Token = ""
+	g.UserName = ""
+}
+
+// LoginCallback component
+type LoginCallback struct {
+	app.Compo
+}
+
+func (l *LoginCallback) Render() app.UI {
+	return app.Main().Body(app.P().Text("Logging in..."))
+}
+
+func (l *LoginCallback) OnMount(ctx app.Context) {
+	w := app.Window()
+	v, _ := url.ParseQuery(w.URL().Fragment)
+	re, _ := strconv.Atoi(v.Get("expires_in"))
+	exp := time.Duration(re) * time.Second
+	t := v.Get("access_token")
+
+	if t != "" {
+		ctx.SetState("/login", t, app.ExpiresIn(exp))
+	}
+	ctx.Navigate("/")
+}
+
+// Root component
+type Root struct {
+	app.Compo
+	currentApp string
+}
+
+func (r *Root) Render() app.UI {
+	isIsochrone := r.currentApp == "isochrone" || r.currentApp == ""
+	return app.Main().Style("font-family", "sans-serif").Body(
+		app.Nav().Style("display", "flex").Style("background-color", "#333").Style("padding", "10px").Body(
+			app.Button().Text("Isochrone Map").
+				Style("margin-right", "10px").
+				Style("background-color", map[bool]string{true: "#555", false: "#333"}[isIsochrone]).
+				Style("color", "white").
+				Style("border", "none").
+				Style("padding", "10px 20px").
+				Style("cursor", "pointer").
+				Style("border-radius", "4px").
+				OnClick(r.showIsochrone),
+			app.Button().Text("Google Login").
+				Style("background-color", map[bool]string{true: "#555", false: "#333"}[!isIsochrone]).
+				Style("color", "white").
+				Style("border", "none").
+				Style("padding", "10px 20px").
+				Style("cursor", "pointer").
+				Style("border-radius", "4px").
+				OnClick(r.showGreeting),
+		),
+		app.Div().Style("display", map[bool]string{true: "block", false: "none"}[isIsochrone]).Body(
+			&IsochronePanel{},
+		),
+		app.Div().Style("display", map[bool]string{true: "block", false: "none"}[!isIsochrone]).Body(
+			&GreetingPanel{},
+		),
+	)
+}
+
+func (r *Root) showIsochrone(ctx app.Context, e app.Event) {
+	r.currentApp = "isochrone"
+}
+
+func (r *Root) showGreeting(ctx app.Context, e app.Event) {
+	r.currentApp = "greeting"
+}
+
 func main() {
-	app.Route("/", &Hello{})
+	app.Route("/", &Root{})
+	app.Route("/foobar", &LoginCallback{})
 
 	app.RunWhenOnBrowser()
 
 	flag.Parse()
 
 	h := &app.Handler{
-		Title: "Isochrone Map WebApp",
+		Title: "Isochrone & Google Login WebApp",
 		Styles: []string{
 			"https://unpkg.com/leaflet@1.9.4/dist/leaflet.css",
 		},
@@ -223,7 +398,6 @@ func main() {
 					var geojson = JSON.parse(geoJsonStr);
 					polygonLayer = L.geoJSON(geojson, {
 						style: function (feature) {
-							// Color code based on range value (in seconds)
 							var value = feature.properties.value;
 							var color = '#800026';
 							if (value <= 60) color = '#ffffcc';

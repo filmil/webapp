@@ -5,7 +5,10 @@ go_library(
     srcs = ["main.go"],
     importpath = "webapp/cmd/app",
     visibility = ["//visibility:private"],
-    deps = ["@com_github_maxence_charriere_go_app_v9//pkg/app:go_default_library"],
+    deps = [
+        "@com_github_maxence_charriere_go_app_v9//pkg/app",
+        "@org_golang_google_api//idtoken",
+    ],
 )
 
 go_binary(

@@ -10,4 +10,3 @@ sh_test(
         "test.bash",
     ],
 )
-
