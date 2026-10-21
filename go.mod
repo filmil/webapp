@@ -1,6 +1,6 @@
 module webapp
 
-go 1.25.8
+go 1.26.10
 
 require github.com/maxence-charriere/go-app/v9 v9.8.0
 
